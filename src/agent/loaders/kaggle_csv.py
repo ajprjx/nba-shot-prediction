@@ -105,8 +105,9 @@ class KaggleCsvLoader(Loader):
         agg["efg_pct"] = (agg["makes"] + 0.5 * agg["threes_made"]) / agg["attempts"]
         agg["pts_per_shot"] = points / agg["attempts"]
 
-        out = schema.empty_canonical()
-        out = pd.concat([out, pd.DataFrame({
+        # share denominators are season totals of mapped zones only;
+        # backcourt/unmapped shots were dropped above so shares sum to 1 across canonical zones.
+        out = pd.DataFrame({
             "season": agg["season"].astype(int),
             "zone": agg["zone"],
             "context": "any",
@@ -121,5 +122,5 @@ class KaggleCsvLoader(Loader):
             "ft_value": np.nan,
             "coverage": "full_history",
             "source_id": self.source_id,
-        })], ignore_index=True)
+        })
         return out[schema.CANONICAL_COLUMNS]
