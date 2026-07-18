@@ -9,6 +9,7 @@ _EPS = 1e-9
 
 
 def alr(shares: np.ndarray) -> np.ndarray:
+    """ALR transform. Requires all shares > 0 (zero shares are out of domain)."""
     shares = np.asarray(shares, dtype=float)
     shares = np.clip(shares, _EPS, None)
     ref = shares[-1]
