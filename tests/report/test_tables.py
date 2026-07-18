@@ -15,7 +15,8 @@ def test_projection_table_formats_and_orders():
     t = projection_table(_fc(), target_year=2030)
     assert list(t["zone"]) == ["restricted_area", "above_break_3"]  # desc by share
     assert t.iloc[0]["projected_share_pct"] == "52.0%"
-    assert "-" in t.iloc[0]["share_ci"]
+    assert t.iloc[0]["share_ci"] == "49.0%-55.0%"
+    assert t.iloc[0]["target_year"] == 2030
 
 
 def test_backtest_table_assigns_trust():
