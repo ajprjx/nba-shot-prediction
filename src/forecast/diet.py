@@ -28,13 +28,13 @@ def forecast_shot_diet(df: pd.DataFrame, target_year: int, damping: float = 0.85
         point_coords[j] = f.fit(years, coord_series[:, j]).forecast(target_year).point
     projected_shares = comp.inverse_alr(point_coords)
 
-    # Per-zone share intervals: forecast each zone's raw share, then renormalize band edges.
+    # Per-zone share intervals via raw-share bootstrap, clamped to [0,1] and forced to
+    # bracket the ALR point (the two paths can diverge slightly on short series).
     share_lo, share_hi = {}, {}
     _, share_mat = comp.shares_matrix(df, zones, value_col="share")
     for j, zone in enumerate(zones):
         f = DampedTrendForecaster(damping=damping, n_boot=n_boot, seed=seed + 100 + j)
         r = f.fit(years, share_mat[:, j]).forecast(target_year)
-        # Ensure intervals bracket the projected share
         share_lo[zone] = max(0.0, min(r.lo, projected_shares[j]))
         share_hi[zone] = min(1.0, max(r.hi, projected_shares[j]))
 
