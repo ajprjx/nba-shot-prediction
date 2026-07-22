@@ -25,7 +25,8 @@ def _acquire_zip(zip_path: str | None) -> str:
     raise FileNotFoundError("Could not locate a .zip in the downloaded dataset")
 
 
-def run(zip_path: str, target_year: int = 2030, out_dir: str = "artifacts") -> dict:
+def run(zip_path: str, target_year: int = 2030, out_dir: str = "artifacts",
+        include_players: bool = True) -> dict:
     os.makedirs(out_dir, exist_ok=True)
     helpers.log_message(f"Loading shots from {zip_path}")
     canonical = KaggleCsvLoader(zip_path).load()
@@ -43,7 +44,27 @@ def run(zip_path: str, target_year: int = 2030, out_dir: str = "artifacts") -> d
     acc = backtest_table(backtest)
     helpers.log_message(f"\n=== Projected {target_year} shot diet ===\n{proj.to_string(index=False)}")
     helpers.log_message(f"\n=== Backtest accuracy ===\n{acc.to_string(index=False)}")
-    return {"forecast": forecast, "backtest": backtest, "plots": plots}
+
+    result: dict = {"forecast": forecast, "backtest": backtest, "plots": plots}
+
+    if include_players:
+        helpers.log_message("Loading 2025-26 player shots via nba_api (30 teams)…")
+        from src.players.analyze import load_player_shots, player_shot_diet, player_upside
+        from src.report.plots import plot_player_upside
+
+        shots = load_player_shots(season="2025-26")
+        diet = player_shot_diet(shots)
+        upside = player_upside(diet, forecast, shots_df=shots)
+
+        upside.to_parquet(os.path.join(out_dir, "player_upside.parquet"), index=False)
+        os.makedirs("assets", exist_ok=True)
+        player_plot = plot_player_upside(upside, out_dir="assets")
+        helpers.log_message(f"Player upside chart saved to {player_plot}")
+
+        result["player_upside"] = upside
+        result["player_plot"] = player_plot
+
+    return result
 
 
 def main() -> None:

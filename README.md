@@ -5,3 +5,4 @@
 ![Paint (Non-RA)](assets/fan_paint_non_ra.png)
 ![Corner 3](assets/fan_corner_3.png)
 ![Mid-Range](assets/fan_midrange.png)
+![Player Shot-Diet Upside 2030](assets/player_upside.png)

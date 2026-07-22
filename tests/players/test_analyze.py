@@ -231,3 +231,27 @@ def test_plot_player_upside_writes_file(tmp_path):
     path = plot_player_upside(upside, out_dir=str(tmp_path))
     assert os.path.exists(path)
     assert path.endswith(".png")
+
+
+import types
+import unittest.mock as mock
+from src.main import run
+
+
+def test_run_skips_players_with_flag(tmp_path, synthetic_canonical):
+    """run() with include_players=False must not import or call player functions."""
+    # Write a dummy parquet so run() can load canonical data
+    canon_path = tmp_path / "canon.parquet"
+    synthetic_canonical.to_parquet(canon_path, index=False)
+
+    with mock.patch("src.main.KaggleCsvLoader") as loader_mock:
+        loader_mock.return_value.load.return_value = synthetic_canonical
+        result = run(
+            zip_path="dummy.zip",
+            target_year=2030,
+            out_dir=str(tmp_path),
+            include_players=False,
+        )
+
+    assert "player_upside" not in result
+    assert "player_plot" not in result
