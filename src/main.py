@@ -73,8 +73,11 @@ def main() -> None:
                     help="Path to archive.zip; downloaded via kagglehub if omitted")
     ap.add_argument("--year", dest="target_year", type=int, default=2030)
     ap.add_argument("--out", dest="out_dir", default="artifacts")
+    ap.add_argument("--no-players", action="store_true",
+                    help="Skip player upside analysis")
     args = ap.parse_args()
-    run(_acquire_zip(args.zip_path), args.target_year, args.out_dir)
+    run(_acquire_zip(args.zip_path), args.target_year, args.out_dir,
+        include_players=not args.no_players)
 
 
 if __name__ == "__main__":

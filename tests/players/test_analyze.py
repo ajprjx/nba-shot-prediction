@@ -1,5 +1,7 @@
 import os
+import unittest.mock as mock
 import pandas as pd
+from src.main import run
 from src.players.analyze import (
     _classify_action,
     _make_slot_label,
@@ -233,17 +235,8 @@ def test_plot_player_upside_writes_file(tmp_path):
     assert path.endswith(".png")
 
 
-import types
-import unittest.mock as mock
-from src.main import run
-
-
 def test_run_skips_players_with_flag(tmp_path, synthetic_canonical):
     """run() with include_players=False must not import or call player functions."""
-    # Write a dummy parquet so run() can load canonical data
-    canon_path = tmp_path / "canon.parquet"
-    synthetic_canonical.to_parquet(canon_path, index=False)
-
     with mock.patch("src.main.KaggleCsvLoader") as loader_mock:
         loader_mock.return_value.load.return_value = synthetic_canonical
         result = run(
