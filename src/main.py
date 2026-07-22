@@ -26,7 +26,7 @@ def _acquire_zip(zip_path: str | None) -> str:
 
 
 def run(zip_path: str, target_year: int = 2030, out_dir: str = "artifacts",
-        include_players: bool = True) -> dict:
+        include_players: bool = True, player_season: str = "2025-26") -> dict:
     os.makedirs(out_dir, exist_ok=True)
     helpers.log_message(f"Loading shots from {zip_path}")
     canonical = KaggleCsvLoader(zip_path).load()
@@ -48,11 +48,11 @@ def run(zip_path: str, target_year: int = 2030, out_dir: str = "artifacts",
     result: dict = {"forecast": forecast, "backtest": backtest, "plots": plots}
 
     if include_players:
-        helpers.log_message("Loading 2025-26 player shots via nba_api (30 teams)…")
+        helpers.log_message(f"Loading {player_season} player shots via nba_api (30 teams)…")
         from src.players.analyze import load_player_shots, player_shot_diet, player_upside
         from src.report.plots import plot_player_upside
 
-        shots = load_player_shots(season="2025-26")
+        shots = load_player_shots(season=player_season)
         diet = player_shot_diet(shots)
         upside = player_upside(diet, forecast, shots_df=shots)
 
@@ -73,11 +73,13 @@ def main() -> None:
                     help="Path to archive.zip; downloaded via kagglehub if omitted")
     ap.add_argument("--year", dest="target_year", type=int, default=2030)
     ap.add_argument("--out", dest="out_dir", default="artifacts")
+    ap.add_argument("--player-season", default="2025-26",
+                    help="NBA season for player shot data (e.g. 2025-26)")
     ap.add_argument("--no-players", action="store_true",
                     help="Skip player upside analysis")
     args = ap.parse_args()
     run(_acquire_zip(args.zip_path), args.target_year, args.out_dir,
-        include_players=not args.no_players)
+        include_players=not args.no_players, player_season=args.player_season)
 
 
 if __name__ == "__main__":

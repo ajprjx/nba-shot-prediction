@@ -211,6 +211,11 @@ def player_upside(
     to run zone-level ranking only (faster, useful for testing or batch sweeps).
     """
     proj = forecast_df[["zone", "projected_pts_per_shot", "projected_share"]]
+    player_zones = set(diet_df["zone"].unique())
+    forecast_zones = set(proj["zone"].unique())
+    missing = player_zones - forecast_zones
+    if missing:
+        raise ValueError(f"player_upside: forecast_df missing zones present in diet_df: {missing}")
     league_mix_pts = float((proj["projected_share"] * proj["projected_pts_per_shot"]).sum())
 
     above_avg_zones = set(proj[proj["projected_pts_per_shot"] > league_mix_pts]["zone"])
@@ -237,7 +242,6 @@ def player_upside(
         # zones the player has never attempted (treat those as share=0).
         above_avg_proj = proj[proj["zone"].isin(above_avg_zones)].copy()
         player_zone_share = dict(zip(grp["zone"], grp["share"]))
-        above_avg_proj = above_avg_proj.copy()
         above_avg_proj["player_share"] = above_avg_proj["zone"].map(player_zone_share).fillna(0.0)
         above_avg_proj["under_index"] = above_avg_proj["projected_share"] - above_avg_proj["player_share"]
         shift_to = (

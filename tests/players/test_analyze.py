@@ -123,7 +123,7 @@ def test_min_attempts_filter():
 def test_diet_pts_per_shot_correct():
     shots = _synthetic_shots()
     diet = player_shot_diet(shots, min_attempts=1000)
-    # Player A: 700 made 2PT → 1400 pts, 300 missed 3PT → 0 pts; 1000 attempts → 1.4 pts/shot
+    # midrange zone: 700 makes × 2 pts = 1400 pts / 700 attempts = 2.0 pts/shot
     row = diet[(diet["player_name"] == "Player A") & (diet["zone"] == "midrange")].iloc[0]
     assert abs(row["pts_per_shot"] - 1400 / 700) < 1e-6
 
