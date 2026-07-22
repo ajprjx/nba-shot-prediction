@@ -81,7 +81,7 @@ def plot_player_upside(upside_df: pd.DataFrame, out_dir: str, top_n: int = 20) -
         for bar, rec in zip(bars, data["specific_rec"]):
             if rec and rec not in ("already well-positioned", "insufficient data"):
                 ax.text(
-                    bar.get_width() + x_range * 0.03,
+                    bar.get_x() + bar.get_width() + x_range * 0.03,
                     bar.get_y() + bar.get_height() / 2,
                     str(rec),
                     va="center", ha="left",
@@ -109,7 +109,7 @@ def plot_player_upside(upside_df: pd.DataFrame, out_dir: str, top_n: int = 20) -
 
     # Extra right margin so annotations don't clip
     xlim = ax.get_xlim()
-    ax.set_xlim(xlim[0], xlim[1] + (xlim[1] - xlim[0]) * 1.3)
+    ax.set_xlim(xlim[0], xlim[1] + (xlim[1] - xlim[0]) * 0.4)
 
     plt.tight_layout()
     os.makedirs(out_dir, exist_ok=True)
