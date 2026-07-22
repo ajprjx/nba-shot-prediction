@@ -155,3 +155,116 @@ def league_slot_stats(shots_df: pd.DataFrame) -> pd.DataFrame:
 
     return agg[["zone", "shot_zone_basic", "sub_area", "action_category", "slot_label",
                 "attempts", "share", "fg_pct", "pts_per_shot"]].reset_index(drop=True)
+
+
+def specific_shot_rec(
+    player_name: str,
+    shots_df: pd.DataFrame,
+    league_stats_df: pd.DataFrame,
+    league_mix_pts: float,
+) -> str:
+    """Return the slot label of the highest-value, most under-used shot for a player.
+
+    league_stats_df should be the output of league_slot_stats(shots_df).
+    league_mix_pts is the weighted-average projected pts/shot under the 2030 mix.
+    """
+    player_shots = shots_df[shots_df["player_name"] == player_name]
+    if player_shots.empty:
+        return "insufficient data"
+
+    total = len(player_shots)
+    player_slot = (
+        player_shots
+        .groupby(["zone", "shot_zone_basic", "sub_area", "action_category"])
+        .size()
+        .reset_index(name="attempts")
+    )
+    player_slot["player_share"] = player_slot["attempts"] / total
+
+    combined = league_stats_df.merge(
+        player_slot[["zone", "shot_zone_basic", "sub_area", "action_category", "player_share"]],
+        on=["zone", "shot_zone_basic", "sub_area", "action_category"],
+        how="left",
+    ).fillna({"player_share": 0.0})
+
+    above_avg = combined[combined["pts_per_shot"] > league_mix_pts].copy()
+    if above_avg.empty:
+        return "already well-positioned"
+
+    above_avg["gap"] = above_avg["share"] - above_avg["player_share"]
+    best = above_avg.loc[above_avg["gap"].idxmax()]
+
+    if best["gap"] <= 0:
+        return "already well-positioned"
+
+    return str(best["slot_label"])
+
+
+def player_upside(
+    diet_df: pd.DataFrame,
+    forecast_df: pd.DataFrame,
+    shots_df: Optional[pd.DataFrame] = None,
+) -> pd.DataFrame:
+    """Rank players by pts/shot gain from shifting toward the 2030 league-average mix.
+
+    Pass shots_df to attach per-player specific slot recommendations. Omit it
+    to run zone-level ranking only (faster, useful for testing or batch sweeps).
+    """
+    proj = forecast_df[["zone", "projected_pts_per_shot", "projected_share"]]
+    league_mix_pts = float((proj["projected_share"] * proj["projected_pts_per_shot"]).sum())
+
+    above_avg_zones = set(proj[proj["projected_pts_per_shot"] > league_mix_pts]["zone"])
+    below_avg_zones = set(proj[proj["projected_pts_per_shot"] <= league_mix_pts]["zone"])
+
+    merged = diet_df.merge(proj, on="zone", how="left")
+
+    slot_stats = league_slot_stats(shots_df) if shots_df is not None else None
+
+    rows = []
+    for player_name, grp in merged.groupby("player_name"):
+        total_attempts = int(grp["attempts"].sum())
+        current_mix = float((grp["share"] * grp["projected_pts_per_shot"]).sum())
+
+        low_val = grp[grp["zone"].isin(below_avg_zones)].copy()
+        low_val["over_index"] = low_val["share"] - low_val["projected_share"]
+        shift_from = (
+            low_val.loc[low_val["over_index"].idxmax(), "zone"]
+            if not low_val.empty and low_val["over_index"].max() > 0
+            else None
+        )
+
+        # For shift_to, consider ALL above-avg zones from the forecast — including
+        # zones the player has never attempted (treat those as share=0).
+        above_avg_proj = proj[proj["zone"].isin(above_avg_zones)].copy()
+        player_zone_share = dict(zip(grp["zone"], grp["share"]))
+        above_avg_proj = above_avg_proj.copy()
+        above_avg_proj["player_share"] = above_avg_proj["zone"].map(player_zone_share).fillna(0.0)
+        above_avg_proj["under_index"] = above_avg_proj["projected_share"] - above_avg_proj["player_share"]
+        shift_to = (
+            above_avg_proj.loc[above_avg_proj["under_index"].idxmax(), "zone"]
+            if not above_avg_proj.empty and above_avg_proj["under_index"].max() > 0
+            else None
+        )
+
+        rec = (
+            specific_shot_rec(player_name, shots_df, slot_stats, league_mix_pts)
+            if shots_df is not None
+            else None
+        )
+
+        rows.append({
+            "player_name": player_name,
+            "total_attempts": total_attempts,
+            "current_mix_pts": round(current_mix, 4),
+            "league_mix_pts": round(league_mix_pts, 4),
+            "opportunity_delta": round(league_mix_pts - current_mix, 4),
+            "shift_from_zone": shift_from,
+            "shift_to_zone": shift_to,
+            "specific_rec": rec,
+        })
+
+    return (
+        pd.DataFrame(rows)
+        .sort_values("opportunity_delta", ascending=False)
+        .reset_index(drop=True)
+    )

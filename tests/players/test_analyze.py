@@ -5,6 +5,8 @@ from src.players.analyze import (
     _normalize_raw,
     player_shot_diet,
     league_slot_stats,
+    specific_shot_rec,
+    player_upside,
 )
 
 
@@ -134,3 +136,87 @@ def test_league_slot_stats_shares_sum_to_one():
     shots = _synthetic_shots()
     stats = league_slot_stats(shots)
     assert abs(stats["share"].sum() - 1.0) < 1e-9
+
+
+def _synthetic_forecast():
+    """restricted_area > corner_3 > above_break_3 > paint_non_ra > midrange."""
+    return pd.DataFrame([
+        {"zone": "restricted_area", "projected_pts_per_shot": 1.35, "projected_share": 0.30},
+        {"zone": "corner_3",        "projected_pts_per_shot": 1.16, "projected_share": 0.12},
+        {"zone": "above_break_3",   "projected_pts_per_shot": 1.10, "projected_share": 0.40},
+        {"zone": "paint_non_ra",    "projected_pts_per_shot": 0.90, "projected_share": 0.08},
+        {"zone": "midrange",        "projected_pts_per_shot": 0.82, "projected_share": 0.10},
+    ])
+
+
+def test_upside_ranking_direction():
+    shots = _synthetic_shots()
+    diet = player_shot_diet(shots, min_attempts=1000)
+    upside = player_upside(diet, _synthetic_forecast())
+    deltas = dict(zip(upside["player_name"], upside["opportunity_delta"]))
+    # Player A (70% midrange) has more to gain than Player B (70% restricted area)
+    assert deltas["Player A"] > deltas["Player B"]
+
+
+def test_upside_sorted_descending():
+    shots = _synthetic_shots()
+    diet = player_shot_diet(shots, min_attempts=1000)
+    upside = player_upside(diet, _synthetic_forecast())
+    assert list(upside["opportunity_delta"]) == sorted(upside["opportunity_delta"], reverse=True)
+
+
+def test_shift_from_zone_is_low_value():
+    shots = _synthetic_shots()
+    diet = player_shot_diet(shots, min_attempts=1000)
+    upside = player_upside(diet, _synthetic_forecast())
+    row_a = upside[upside["player_name"] == "Player A"].iloc[0]
+    # Player A is heavily over-indexed on midrange (lowest-value zone)
+    assert row_a["shift_from_zone"] == "midrange"
+
+
+def test_shift_to_zone_is_high_value():
+    shots = _synthetic_shots()
+    diet = player_shot_diet(shots, min_attempts=1000)
+    upside = player_upside(diet, _synthetic_forecast())
+    row_a = upside[upside["player_name"] == "Player A"].iloc[0]
+    forecast = _synthetic_forecast()
+    league_mix = float((forecast["projected_share"] * forecast["projected_pts_per_shot"]).sum())
+    above_avg = set(forecast[forecast["projected_pts_per_shot"] > league_mix]["zone"])
+    assert row_a["shift_to_zone"] in above_avg
+
+
+def test_specific_rec_non_empty_string():
+    shots = _synthetic_shots()
+    diet = player_shot_diet(shots, min_attempts=1000)
+    forecast = _synthetic_forecast()
+    league_mix = float((forecast["projected_share"] * forecast["projected_pts_per_shot"]).sum())
+    stats = league_slot_stats(shots)
+    rec = specific_shot_rec("Player A", shots, stats, league_mix)
+    assert isinstance(rec, str) and len(rec) > 0
+
+
+def test_specific_rec_targets_underused_highvalue_slot():
+    shots = _synthetic_shots()
+    diet = player_shot_diet(shots, min_attempts=1000)
+    forecast = _synthetic_forecast()
+    league_mix = float((forecast["projected_share"] * forecast["projected_pts_per_shot"]).sum())
+    stats = league_slot_stats(shots)
+    # Player A never takes restricted-area shots — that's the highest-value slot
+    rec = specific_shot_rec("Player A", shots, stats, league_mix)
+    # Rec should not be "already well-positioned" since Player A is midrange-heavy
+    assert rec != "already well-positioned"
+
+
+def test_upside_includes_specific_rec_when_shots_provided():
+    shots = _synthetic_shots()
+    diet = player_shot_diet(shots, min_attempts=1000)
+    upside = player_upside(diet, _synthetic_forecast(), shots_df=shots)
+    assert "specific_rec" in upside.columns
+    assert upside["specific_rec"].notna().all()
+
+
+def test_upside_specific_rec_none_without_shots():
+    shots = _synthetic_shots()
+    diet = player_shot_diet(shots, min_attempts=1000)
+    upside = player_upside(diet, _synthetic_forecast(), shots_df=None)
+    assert upside["specific_rec"].isna().all()
