@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 from src.players.analyze import (
     _classify_action,
@@ -8,6 +9,7 @@ from src.players.analyze import (
     specific_shot_rec,
     player_upside,
 )
+from src.report.plots import plot_player_upside
 
 
 def _raw(rows):
@@ -220,3 +222,12 @@ def test_upside_specific_rec_none_without_shots():
     diet = player_shot_diet(shots, min_attempts=1000)
     upside = player_upside(diet, _synthetic_forecast(), shots_df=None)
     assert upside["specific_rec"].isna().all()
+
+
+def test_plot_player_upside_writes_file(tmp_path):
+    shots = _synthetic_shots()
+    diet = player_shot_diet(shots, min_attempts=1000)
+    upside = player_upside(diet, _synthetic_forecast(), shots_df=shots)
+    path = plot_player_upside(upside, out_dir=str(tmp_path))
+    assert os.path.exists(path)
+    assert path.endswith(".png")
