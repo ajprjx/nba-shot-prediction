@@ -107,3 +107,51 @@ def load_player_shots(season: str = "2025-26", request_delay: float = 0.6) -> pd
         time.sleep(request_delay)
 
     return _normalize_raw(pd.concat(frames, ignore_index=True))
+
+
+def player_shot_diet(shots_df: pd.DataFrame, min_attempts: int = 1000) -> pd.DataFrame:
+    """Aggregate shots to player × zone grain; filter players below min_attempts."""
+    work = shots_df.assign(pts=shots_df["pts_value"] * shots_df["made"])
+
+    agg = work.groupby(["player_name", "zone"]).agg(
+        attempts=("made", "size"),
+        makes=("made", "sum"),
+        pts=("pts", "sum"),
+    ).reset_index()
+
+    player_totals = agg.groupby("player_name")["attempts"].transform("sum")
+    agg = agg[player_totals >= min_attempts].copy()
+
+    season_totals = agg.groupby("player_name")["attempts"].transform("sum")
+    agg["share"] = agg["attempts"] / season_totals
+    agg["fg_pct"] = agg["makes"] / agg["attempts"]
+    agg["pts_per_shot"] = agg["pts"] / agg["attempts"]
+
+    return agg[["player_name", "zone", "attempts", "share", "fg_pct", "pts_per_shot"]].reset_index(drop=True)
+
+
+def league_slot_stats(shots_df: pd.DataFrame) -> pd.DataFrame:
+    """League-wide efficiency at zone × sub_area × action_category grain.
+
+    Returns the benchmark used by specific_shot_rec. Can be pre-computed once
+    and passed to multiple player lookups.
+    """
+    work = shots_df.assign(pts=shots_df["pts_value"] * shots_df["made"])
+
+    agg = work.groupby(["zone", "shot_zone_basic", "sub_area", "action_category"]).agg(
+        attempts=("made", "size"),
+        makes=("made", "sum"),
+        pts=("pts", "sum"),
+    ).reset_index()
+
+    total = agg["attempts"].sum()
+    agg["share"] = agg["attempts"] / total
+    agg["fg_pct"] = agg["makes"] / agg["attempts"]
+    agg["pts_per_shot"] = agg["pts"] / agg["attempts"]
+    agg["slot_label"] = agg.apply(
+        lambda r: _make_slot_label(r["shot_zone_basic"], r["sub_area"], r["action_category"]),
+        axis=1,
+    )
+
+    return agg[["zone", "shot_zone_basic", "sub_area", "action_category", "slot_label",
+                "attempts", "share", "fg_pct", "pts_per_shot"]].reset_index(drop=True)
